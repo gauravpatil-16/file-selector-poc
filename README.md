@@ -394,7 +394,7 @@ You need **3 terminals** running simultaneously.
 ### Terminal 1: Start Local File Server
 
 ```powershell
-cd C:\Users\Gaurav\Test\mcp-file-selector-poc\local-file-server
+cd local-file-server
 node index.js
 ```
 
@@ -403,7 +403,7 @@ Expected output:
 🚀 ================================
    File Server running!
    URL: http://localhost:3001
-   Project: C:\Users\Gaurav\Test\mcp-file-selector-poc\test-project
+   Project: \test-project
    ================================
 ```
 
