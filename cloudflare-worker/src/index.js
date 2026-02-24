@@ -1,135 +1,448 @@
 // ============================================
 // cloudflare-worker/src/index.js
-// MCP Orchestrator - Runs on Cloudflare Workers
+// MCP Orchestrator - Agentic Tool Loop
+// Supports model selection + full cost/token tracking
 // ============================================
 
+// ────────────────────────────────────────────
+// AVAILABLE MODELS & PRICING (per million tokens)
+// Source: https://docs.x.ai/developers/models
+// ────────────────────────────────────────────
+const MODELS = {
+  "grok-4-1-fast-reasoning": {
+    name: "Grok 4.1 Fast (Reasoning)",
+    input: 0.2,
+    output: 0.5,
+    cachedInput: 0.05,
+    context: 2097152,
+  },
+  "grok-4-1-fast-non-reasoning": {
+    name: "Grok 4.1 Fast (Non-Reasoning)",
+    input: 0.2,
+    output: 0.5,
+    cachedInput: 0.05,
+    context: 2097152,
+  },
+  "grok-code-fast-1": {
+    name: "Grok Code Fast 1",
+    input: 0.2,
+    output: 1.5,
+    cachedInput: 0.02,
+    context: 262144,
+  },
+  "grok-4-fast-reasoning": {
+    name: "Grok 4 Fast (Reasoning)",
+    input: 0.2,
+    output: 0.5,
+    cachedInput: 0.05,
+    context: 2097152,
+  },
+  "grok-4-fast-non-reasoning": {
+    name: "Grok 4 Fast (Non-Reasoning)",
+    input: 0.2,
+    output: 0.5,
+    cachedInput: 0.05,
+    context: 2097152,
+  },
+  "grok-4-0709": {
+    name: "Grok 4 (0709)",
+    input: 3.0,
+    output: 15.0,
+    cachedInput: 0.75,
+    context: 262144,
+  },
+  "grok-3-mini": {
+    name: "Grok 3 Mini",
+    input: 0.3,
+    output: 0.5,
+    cachedInput: 0.075,
+    context: 131072,
+  },
+  "grok-3": {
+    name: "Grok 3",
+    input: 3.0,
+    output: 15.0,
+    cachedInput: 0.75,
+    context: 131072,
+  },
+};
+
+const DEFAULT_MODEL = "grok-4-1-fast-reasoning";
+
+// ────────────────────────────────────────────
+// TOOL DEFINITIONS
+// ────────────────────────────────────────────
+const TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "list_files",
+      description:
+        "List all files in the project. Returns an array of file paths. Call this first to understand the project structure.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_files",
+      description:
+        "Read the content of one or more files. Use this to inspect file contents and understand code, imports, dependencies, etc. You can call this multiple times with different files.",
+      parameters: {
+        type: "object",
+        properties: {
+          files: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "Array of file paths to read (e.g. ['src/App.jsx', 'src/utils/helpers.js'])",
+          },
+        },
+        required: ["files"],
+      },
+    },
+  },
+];
+
+// ────────────────────────────────────────────
+// SYSTEM PROMPT
+// ────────────────────────────────────────────
+const SYSTEM_PROMPT = `You are an expert code analyst working as a file selector for an AI web application builder.
+
+Your job: Given a user's change request, figure out exactly which files need to be modified or referenced to implement that change.
+
+You have 2 tools:
+1. **list_files** - Lists all files in the project. Call this first.
+2. **read_files** - Reads content of specific files. Call this to inspect code.
+
+## Your Process:
+1. First, call list_files to see the project structure
+2. Based on the file names and the user's request, read files that look relevant
+3. After reading, if you discover imports/dependencies/references to other files, read those too
+4. Keep reading until you're confident you know ALL files involved
+5. When done, output your final answer
+
+## Rules:
+- Be thorough: check imports, shared components, utility files, styles
+- Don't select files that aren't actually needed
+- You can call read_files multiple times with different files
+- When you're done exploring, provide your final answer
+
+## Final Answer Format:
+When you've finished exploring, respond with EXACTLY this JSON (no tool calls):
+{
+  "finalFiles": ["path/to/file1.jsx", "path/to/file2.js"],
+  "reasoning": "Explanation of why each file was selected"
+}`;
+
+// ────────────────────────────────────────────
+// WORKER ENTRY POINT
+// ────────────────────────────────────────────
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // CORS headers (allow requests from anywhere for POC)
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
     };
 
-    // Handle preflight
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders });
     }
 
-    // ── Routes ──
     try {
       // Health check
       if (url.pathname === "/health") {
         return jsonRes({ status: "ok", service: "mcp-file-selector" }, 200, corsHeaders);
       }
 
+      // List available models
+      if (url.pathname === "/api/models" && request.method === "GET") {
+        const modelList = Object.entries(MODELS).map(([id, info]) => ({
+          id,
+          name: info.name,
+          inputPricePerMillion: info.input,
+          outputPricePerMillion: info.output,
+          cachedInputPricePerMillion: info.cachedInput,
+          contextWindow: info.context,
+        }));
+        return jsonRes({ models: modelList, default: DEFAULT_MODEL }, 200, corsHeaders);
+      }
+
       // Main endpoint
       if (url.pathname === "/api/select-files" && request.method === "POST") {
-        const body = await request.json();
-        const { query, ngrokUrl } = body;
+        const { query, ngrokUrl, model } = await request.json();
 
         if (!query || !ngrokUrl) {
+          return jsonRes({ error: "Missing 'query' and 'ngrokUrl'" }, 400, corsHeaders);
+        }
+
+        const selectedModel = model && MODELS[model] ? model : DEFAULT_MODEL;
+
+        if (model && !MODELS[model]) {
           return jsonRes(
-            { error: "Missing required fields: 'query' and 'ngrokUrl'" },
+            {
+              error: `Unknown model '${model}'. Use GET /api/models to see available models.`,
+              availableModels: Object.keys(MODELS),
+            },
             400,
             corsHeaders
           );
         }
 
-        const result = await orchestrate(query, ngrokUrl, env.GROQ_API_KEY);
+        const result = await agentLoop(query, ngrokUrl, env.XAI_API_KEY, selectedModel);
         return jsonRes(result, 200, corsHeaders);
       }
 
-      return jsonRes({ error: "Not found. Use POST /api/select-files" }, 404, corsHeaders);
+      return jsonRes({ error: "Not found. Use POST /api/select-files or GET /api/models" }, 404, corsHeaders);
     } catch (err) {
       console.error("Worker error:", err);
-      return jsonRes({ error: err.message, stack: err.stack }, 500, corsHeaders);
+      return jsonRes({ error: err.message }, 500, corsHeaders);
     }
   },
 };
 
 // ============================================
-// MAIN ORCHESTRATION FLOW
+// COST CALCULATOR
 // ============================================
-async function orchestrate(userQuery, ngrokUrl, groqApiKey) {
+function calculateCost(usage, modelId) {
+  const pricing = MODELS[modelId];
+  if (!usage || !pricing) return { inputCost: 0, outputCost: 0, cachedCost: 0, totalCost: 0 };
+
+  const promptTokens = usage.prompt_tokens || 0;
+  const completionTokens = usage.completion_tokens || 0;
+  const cachedTokens = usage.prompt_tokens_details?.cached_tokens || 0;
+
+  // Non-cached input tokens = total prompt - cached
+  const nonCachedInput = promptTokens - cachedTokens;
+
+  const inputCost = (nonCachedInput / 1_000_000) * pricing.input;
+  const cachedCost = (cachedTokens / 1_000_000) * pricing.cachedInput;
+  const outputCost = (completionTokens / 1_000_000) * pricing.output;
+  const totalCost = inputCost + cachedCost + outputCost;
+
+  return {
+    inputCost: +inputCost.toFixed(8),
+    cachedCost: +cachedCost.toFixed(8),
+    outputCost: +outputCost.toFixed(8),
+    totalCost: +totalCost.toFixed(8),
+  };
+}
+
+// ============================================
+// AGENTIC LOOP
+// ============================================
+async function agentLoop(userQuery, ngrokUrl, xaiApiKey, modelId) {
   const logs = [];
   const log = (msg) => {
     console.log(msg);
     logs.push(msg);
   };
 
-  // ── STEP 1: Fetch file list from local server ──
-  log("📂 Step 1: Fetching file list from local server...");
-  const fileList = await getFileList(ngrokUrl);
-  log(`   ✅ Found ${fileList.length} files`);
-  log(`   Files: ${fileList.join(", ")}`);
+  const MAX_ITERATIONS = 15;
+  let iteration = 0;
+  const requestStartTime = Date.now();
 
-  // ── STEP 2: Ask AI to pick initial relevant files ──
-  log("\n🤖 Step 2: AI selecting initial files...");
-  const pass1 = await aiPass1_SelectFiles(userQuery, fileList, groqApiKey);
-  log(`   ✅ AI selected ${pass1.selectedFiles.length} files`);
-  log(`   Selected: ${pass1.selectedFiles.join(", ")}`);
-  log(`   Reasoning: ${pass1.reasoning}`);
+  // Per-iteration metrics
+  const iterations = [];
 
-  // ── STEP 3: Read those files' content ──
-  log("\n📖 Step 3: Reading selected files...");
-  const fileContents = await readFiles(ngrokUrl, pass1.selectedFiles);
-  const successfulReads = fileContents.filter((f) => !f.error);
-  log(`   ✅ Successfully read ${successfulReads.length} files`);
+  // Totals
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let totalCachedTokens = 0;
+  let totalCost = 0;
 
-  // ── STEP 4: AI refines — add missing files, remove irrelevant ones ──
-  log("\n🔍 Step 4: AI refining selection...");
-  const remainingFiles = fileList.filter(
-    (f) => !pass1.selectedFiles.includes(f)
-  );
-  const pass2 = await aiPass2_Refine(
-    userQuery,
-    successfulReads,
-    remainingFiles,
-    groqApiKey
-  );
-  log(`   Files to ADD: ${pass2.add.length > 0 ? pass2.add.join(", ") : "none"}`);
-  log(`   Files to REMOVE: ${pass2.remove.length > 0 ? pass2.remove.join(", ") : "none"}`);
-  log(`   Reasoning: ${pass2.reasoning}`);
+  const modelInfo = MODELS[modelId];
 
-  // ── STEP 5: Read any newly added files ──
-  let allContents = [...successfulReads];
-  if (pass2.add.length > 0) {
-    log("\n📖 Step 5: Reading additional files...");
-    const additional = await readFiles(ngrokUrl, pass2.add);
-    const successfulAdditional = additional.filter((f) => !f.error);
-    allContents = [...allContents, ...successfulAdditional];
-    log(`   ✅ Read ${successfulAdditional.length} additional files`);
-  } else {
-    log("\n⏭️  Step 5: No additional files to read");
+  // Conversation history
+  const messages = [
+    { role: "system", content: SYSTEM_PROMPT },
+    {
+      role: "user",
+      content: `User wants to make this change: "${userQuery}"\n\nPlease analyze the project and select all relevant files for this change. Start by listing the files.`,
+    },
+  ];
+
+  const toolCalls = [];
+  let finalResult = null;
+
+  log(`🚀 Starting agentic file selection`);
+  log(`   Query: "${userQuery}"`);
+  log(`   Model: ${modelInfo.name} (${modelId})`);
+  log(`   Pricing: ${modelInfo.input}/M input, ${modelInfo.output}/M output`);
+  log(`   Cached pricing: ${modelInfo.cachedInput}/M`);
+
+  while (iteration < MAX_ITERATIONS) {
+    iteration++;
+    const iterStartTime = Date.now();
+
+    log(`\n🔄 Iteration ${iteration}/${MAX_ITERATIONS}`);
+
+    // Call xAI
+    const response = await callXAI(messages, xaiApiKey, modelId);
+    log(`   response: ${response}/M`);
+    const iterEndTime = Date.now();
+    const iterDuration = iterEndTime - iterStartTime;
+
+    // Extract usage
+    const usage = response.usage || {};
+    const promptTokens = usage.prompt_tokens || 0;
+    const completionTokens = usage.completion_tokens || 0;
+    const cachedTokens = usage.prompt_tokens_details?.cached_tokens || 0;
+    const iterCost = calculateCost(usage, modelId);
+
+    // Accumulate totals
+    totalInputTokens += promptTokens;
+    totalOutputTokens += completionTokens;
+    totalCachedTokens += cachedTokens;
+    totalCost += iterCost.totalCost;
+
+    // Build iteration record
+    const iterRecord = {
+      iteration,
+      durationMs: iterDuration,
+      durationFormatted: `${(iterDuration / 1000).toFixed(2)}s`,
+      tokens: {
+        input: promptTokens,
+        output: completionTokens,
+        cached: cachedTokens,
+        total: promptTokens + completionTokens,
+      },
+      cost: iterCost,
+      toolsCalled: [],
+    };
+
+    log(`   ⏱️  Duration: ${iterRecord.durationFormatted}`);
+    log(`   📊 Tokens — Input: ${promptTokens}, Output: ${completionTokens}, Cached: ${cachedTokens}`);
+    log(`   💰 Cost: $${iterCost.totalCost.toFixed(6)}`);
+
+    const assistantMessage = response.choices[0].message;
+    messages.push(assistantMessage);
+
+    // ── Case 1: AI is calling tools ──
+    if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+      for (const toolCall of assistantMessage.tool_calls) {
+        const fnName = toolCall.function.name;
+        const fnArgs = JSON.parse(toolCall.function.arguments || "{}");
+
+        log(`   🔧 Tool: ${fnName}(${JSON.stringify(fnArgs)})`);
+        iterRecord.toolsCalled.push({ tool: fnName, args: fnArgs });
+
+        let toolResult;
+
+        if (fnName === "list_files") {
+          toolResult = await executeListFiles(ngrokUrl);
+          log(`   📂 Listed ${toolResult.files.length} files`);
+          toolCalls.push({ tool: "list_files", result: `${toolResult.files.length} files` });
+        } else if (fnName === "read_files") {
+          toolResult = await executeReadFiles(ngrokUrl, fnArgs.files || []);
+          const ok = toolResult.files.filter((f) => !f.error).length;
+          log(`   📖 Read ${ok}/${fnArgs.files.length} files: ${fnArgs.files.join(", ")}`);
+          toolCalls.push({ tool: "read_files", files: fnArgs.files });
+        } else {
+          toolResult = { error: `Unknown tool: ${fnName}` };
+          log(`   ❌ Unknown tool: ${fnName}`);
+        }
+
+        messages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: JSON.stringify(toolResult),
+        });
+      }
+    }
+    // ── Case 2: AI is done ──
+    else if (assistantMessage.content) {
+      log(`\n💬 AI responded with text`);
+
+      try {
+        const content = assistantMessage.content;
+        const jsonMatch = content.match(/\{[\s\S]*"finalFiles"[\s\S]*\}/);
+
+        if (jsonMatch) {
+          finalResult = JSON.parse(jsonMatch[0]);
+          log(`✅ Final selection: ${finalResult.finalFiles.length} files`);
+          log(`   Files: ${finalResult.finalFiles.join(", ")}`);
+          iterations.push(iterRecord);
+          break;
+        } else {
+          log(`   ⚠️ No JSON found, asking AI to finalize...`);
+          messages.push({
+            role: "user",
+            content: "Please provide your final answer now as JSON with finalFiles array and reasoning.",
+          });
+        }
+      } catch (parseErr) {
+        log(`   ⚠️ Parse error: ${parseErr.message}`);
+        messages.push({
+          role: "user",
+          content: 'Your response wasn\'t valid JSON. Please respond with ONLY: { "finalFiles": [...], "reasoning": "..." }',
+        });
+      }
+    }
+    iterRecord.push(response)
+    iterations.push(iterRecord);
   }
 
-  // ── STEP 6: Build final list ──
-  const removeSet = new Set(pass2.remove);
-  const finalContents = allContents.filter((f) => !removeSet.has(f.path));
-  const finalPaths = finalContents.map((f) => f.path);
+  if (!finalResult) {
+    log(`\n⚠️ Reached max iterations without final answer`);
+    finalResult = { finalFiles: [], reasoning: "Agent did not converge within iteration limit." };
+  }
 
-  log(`\n✅ FINAL RESULT: ${finalPaths.length} files selected`);
-  log(`   Final files: ${finalPaths.join(", ")}`);
+  const totalDuration = Date.now() - requestStartTime;
 
   return {
     success: true,
     query: userQuery,
-    steps: {
-      allFiles: fileList,
-      initialSelection: pass1.selectedFiles,
-      initialReasoning: pass1.reasoning,
-      refinement: {
-        added: pass2.add,
-        removed: pass2.remove,
-        reasoning: pass2.reasoning,
+
+    // Model info
+    model: {
+      id: modelId,
+      name: modelInfo.name,
+      pricing: {
+        inputPerMillion: modelInfo.input,
+        outputPerMillion: modelInfo.output,
+        cachedInputPerMillion: modelInfo.cachedInput,
       },
     },
-    finalFiles: finalPaths,
-    fileContents: finalContents,
+
+    // Final result
+    finalFiles: finalResult.finalFiles,
+    reasoning: finalResult.reasoning,
+
+    // Timing
+    timing: {
+      totalDurationMs: totalDuration,
+      totalDurationFormatted: `${(totalDuration / 1000).toFixed(2)}s`,
+      iterationCount: iterations.length,
+    },
+
+    // Token totals
+    tokens: {
+      totalInput: totalInputTokens,
+      totalOutput: totalOutputTokens,
+      totalCached: totalCachedTokens,
+      grandTotal: totalInputTokens + totalOutputTokens,
+    },
+
+    // Cost totals
+    cost: {
+      totalInputCost: +((totalInputTokens - totalCachedTokens) / 1_000_000 * modelInfo.input).toFixed(8),
+      totalCachedCost: +(totalCachedTokens / 1_000_000 * modelInfo.cachedInput).toFixed(8),
+      totalOutputCost: +(totalOutputTokens / 1_000_000 * modelInfo.output).toFixed(8),
+      totalCost: +totalCost.toFixed(8),
+      currency: "USD",
+    },
+
+    // Per-iteration breakdown
+    iterations,
+
+    // Tool calls summary
+    toolCalls,
+
+    // Logs
     logs,
   };
 }
@@ -137,20 +450,15 @@ async function orchestrate(userQuery, ngrokUrl, groqApiKey) {
 // ============================================
 // LOCAL FILE SERVER API CALLS (via ngrok)
 // ============================================
-async function getFileList(ngrokUrl) {
+async function executeListFiles(ngrokUrl) {
   const res = await fetch(`${ngrokUrl}/files`, {
     headers: { "ngrok-skip-browser-warning": "true" },
   });
-
-  if (!res.ok) {
-    throw new Error(`Failed to fetch file list: ${res.status} ${res.statusText}`);
-  }
-
-  const data = await res.json();
-  return data.files;
+  if (!res.ok) throw new Error(`list_files failed: ${res.status}`);
+  return await res.json();
 }
 
-async function readFiles(ngrokUrl, filePaths) {
+async function executeReadFiles(ngrokUrl, filePaths) {
   const res = await fetch(`${ngrokUrl}/files/read`, {
     method: "POST",
     headers: {
@@ -159,123 +467,37 @@ async function readFiles(ngrokUrl, filePaths) {
     },
     body: JSON.stringify({ files: filePaths }),
   });
-
-  if (!res.ok) {
-    throw new Error(`Failed to read files: ${res.status} ${res.statusText}`);
-  }
-
-  const data = await res.json();
-  return data.files;
+  if (!res.ok) throw new Error(`read_files failed: ${res.status}`);
+  return await res.json();
 }
 
 // ============================================
-// GROQ AI CALLS
+// xAI (GROK) API CALL
 // ============================================
-async function callGroq(messages, groqApiKey) {
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+async function callXAI(messages, xaiApiKey, modelId) {
+  const res = await fetch("https://api.x.ai/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${groqApiKey}`,
+      Authorization: `Bearer ${xaiApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
+      model: modelId,
       messages,
+      tools: TOOLS,
+      tool_choice: "auto",
       temperature: 0.1,
-      max_tokens: 2000,
-      response_format: { type: "json_object" },
+      max_tokens: 4000,
     }),
   });
 
   const data = await res.json();
 
   if (data.error) {
-    throw new Error(`Groq API error: ${data.error.message}`);
+    throw new Error(`xAI API error: ${data.error.message}`);
   }
 
-  const content = data.choices[0].message.content;
-
-  try {
-    return JSON.parse(content);
-  } catch {
-    throw new Error(`Failed to parse Groq response as JSON: ${content}`);
-  }
-}
-
-// ── AI Pass 1: Initial file selection from file list ──
-async function aiPass1_SelectFiles(userQuery, fileList, groqApiKey) {
-  const messages = [
-    {
-      role: "system",
-      content: `You are an expert code analyst. Given a user's requested change and a project's file list, select the files most likely relevant to implement that change.
-
-Think about:
-- Which files directly relate to the feature/change
-- Entry points, components, pages involved
-- Config files if config changes are needed  
-- Utility files that might be affected
-- Style files if UI changes are needed
-- Be thorough but not excessive (don't select everything)
-
-You MUST respond with ONLY valid JSON in this exact format:
-{
-  "selectedFiles": ["path/to/file1.jsx", "path/to/file2.js"],
-  "reasoning": "Brief explanation of why these files were selected"
-}`,
-    },
-    {
-      role: "user",
-      content: `User wants to: "${userQuery}"
-
-Here are all the files in the project:
-${fileList.map((f) => `- ${f}`).join("\n")}
-
-Select the relevant files for this change.`,
-    },
-  ];
-
-  return await callGroq(messages, groqApiKey);
-}
-
-// ── AI Pass 2: Refine after reading file contents ──
-async function aiPass2_Refine(userQuery, fileContents, otherFiles, groqApiKey) {
-  const filesStr = fileContents
-    .map((f) => `\n=== FILE: ${f.path} ===\n${f.content}\n`)
-    .join("\n");
-
-  const messages = [
-    {
-      role: "system",
-      content: `You are an expert code analyst. You previously selected some files for a code change, and now you've read their contents. 
-
-Based on what you see in the code (imports, references, dependencies), decide:
-1. Are there files in the "other available files" list that should be ADDED? (e.g., imported modules, shared types, related components)
-2. Are there currently selected files that should be REMOVED? (e.g., they turned out to be unrelated)
-
-You MUST respond with ONLY valid JSON in this exact format:
-{
-  "add": ["path/to/new-file.js"],
-  "remove": ["path/to/unneeded-file.js"],
-  "reasoning": "Brief explanation"
-}
-
-Use empty arrays if no changes needed.`,
-    },
-    {
-      role: "user",
-      content: `User wants to: "${userQuery}"
-
-Currently selected files and their content:
-${filesStr}
-
-Other available files NOT yet selected:
-${otherFiles.map((f) => `- ${f}`).join("\n")}
-
-Should any files be added or removed?`,
-    },
-  ];
-
-  return await callGroq(messages, groqApiKey);
+  return data;
 }
 
 // ============================================
@@ -284,9 +506,6 @@ Should any files be added or removed?`,
 function jsonRes(data, status, headers = {}) {
   return new Response(JSON.stringify(data, null, 2), {
     status,
-    headers: {
-      "Content-Type": "application/json",
-      ...headers,
-    },
+    headers: { "Content-Type": "application/json", ...headers },
   });
 }
