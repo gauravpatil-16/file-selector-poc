@@ -1,0 +1,44 @@
+[
+  {
+    "dayOfWeek": 0,
+    "startTime": "10:00",
+    "endTime": "16:00",
+    "isActive": false
+  },
+  {
+    "dayOfWeek": 1,
+    "startTime": "09:00",
+    "endTime": "18:00",
+    "isActive": true
+  },
+  {
+    "dayOfWeek": 2,
+    "startTime": "09:00",
+    "endTime": "18:00",
+    "isActive": true
+  },
+  {
+    "dayOfWeek": 3,
+    "startTime": "09:00",
+    "endTime": "18:00",
+    "isActive": true
+  },
+  {
+    "dayOfWeek": 4,
+    "startTime": "09:00",
+    "endTime": "20:00",
+    "isActive": true
+  },
+  {
+    "dayOfWeek": 5,
+    "startTime": "08:00",
+    "endTime": "18:00",
+    "isActive": true
+  },
+  {
+    "dayOfWeek": 6,
+    "startTime": "10:00",
+    "endTime": "16:00",
+    "isActive": true
+  }
+]

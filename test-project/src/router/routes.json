@@ -1,0 +1,211 @@
+{
+"/services": {
+    "allow": {
+      "when": {
+        "conditions": [
+          {
+            "label": "User must be authenticated",
+            "rule": "authenticated"
+          }
+        ]
+      },
+      "redirectOnDeny": "/booker/login"
+    }
+  },
+"/booking-config": {
+    "allow": {
+      "when": {
+        "conditions": [
+          {
+            "label": "User must be authenticated to access booking configuration",
+            "rule": "authenticated"
+          }
+        ]
+      },
+      "redirectOnDeny": "/booker/login"
+    }
+  },
+  "/config/*": {
+    "allow": {
+      "when": {
+        "conditions": [
+          {
+            "label": "Public access to booking configurations",
+            "rule": "public"
+          }
+        ]
+      }
+    }
+  },
+  "/config/:slug": {
+    "allow": {
+      "when": {
+        "conditions": [
+          {
+            "label": "Public access to booking configurations",
+            "rule": "public"
+          }
+        ]
+      }
+}
+  },
+  "/services": {
+    "allow": {
+      "when": {
+        "conditions": [
+          {
+            "label": "User must be authenticated",
+            "rule": "authenticated"
+          }
+        ]
+      },
+      "redirectOnDeny": "/booker/login"
+    }
+  },
+  "/bookings": {
+    "allow": {
+      "when": {
+        "conditions": [
+          {
+            "label": "User must be authenticated",
+            "rule": "authenticated"
+          }
+        ]
+      },
+      "redirectOnDeny": "/booker/login"
+    }
+  },
+  "/availability": {
+    "allow": {
+      "when": {
+        "conditions": [
+          {
+            "label": "User must be authenticated",
+            "rule": "authenticated"
+          }
+        ]
+      },
+      "redirectOnDeny": "/booker/login"
+    }
+  },
+"/book": {
+    "allow": {
+      "when": {
+        "conditions": [
+          {
+            "label": "Always allow access to booking page",
+            "rule": "public"
+          }
+        ]
+      }
+    }
+  },
+"/book/:slug": {
+    "allow": {
+      "when": {
+        "conditions": [
+          {
+            "label": "Public booking page access",
+            "rule": "public"
+          }
+        ]
+      }
+    }
+  },
+  "/booking-confirmation/:slug": {
+    "allow": {
+      "when": {
+        "conditions": [
+          {
+            "label": "Public access allowed", 
+            "rule": "public"
+          }
+        ]
+      }
+    }
+  },
+  "/booker/login": {
+    "allow": {
+      "when": {
+        "conditions": [
+          {
+            "label": "Public page",
+            "rule": "public"
+          }
+        ]
+      }
+    }
+  },
+  "/booker/signup": {
+    "allow": {
+      "when": {
+        "conditions": [
+          {
+            "label": "Public page",
+            "rule": "public"
+          }
+        ]
+      }
+    }
+  },
+  "/callback": {
+    "allow": {
+      "when": {
+        "conditions": [
+          {
+            "label": "Public page",
+            "rule": "public"
+          }
+        ]
+      }
+    }
+  },
+  "/error": {
+    "allow": {
+      "when": {
+        "conditions": [
+          {
+            "label": "Public page",
+            "rule": "public"
+          }
+        ]
+      }
+    }
+  },
+  "/access-denied": {
+    "allow": {
+      "when": {
+        "conditions": [
+          {
+            "label": "Public page",
+            "rule": "public"
+          }
+        ]
+      }
+    }
+  },
+  "/prompt-password/:appId/:emailAddress/:provider": {
+    "allow": {
+      "when": {
+        "conditions": [
+          {
+            "label": "Public page",
+            "rule": "public"
+          }
+        ]
+      }
+    }
+  },
+  "/reset-password/:appId/:fields": {
+    "allow": {
+      "when": {
+        "conditions": [
+          {
+            "label": "Public page",
+            "rule": "public"
+          }
+        ]
+      }
+    }
+  }
+}
