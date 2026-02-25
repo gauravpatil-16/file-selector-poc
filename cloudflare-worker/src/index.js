@@ -214,9 +214,11 @@ function calculateCost(usage, modelId) {
   const promptTokens = usage.prompt_tokens || 0;
   const completionTokens = usage.completion_tokens || 0;
   const cachedTokens = usage.prompt_tokens_details?.cached_tokens || 0;
+  const totalTokens = usage.total_tokens || 0;
 
-  // Non-cached input tokens = total prompt - cached
-  const nonCachedInput = promptTokens - cachedTokens;
+  // xAI may report prompt_tokens as non-cached only, or as total inclusive of cached.
+  // To be safe, ensure non-cached is never negative.
+  const nonCachedInput = Math.max(0, promptTokens - cachedTokens);
 
   const inputCost = (nonCachedInput / 1_000_000) * pricing.input;
   const cachedCost = (cachedTokens / 1_000_000) * pricing.cachedInput;
@@ -224,6 +226,11 @@ function calculateCost(usage, modelId) {
   const totalCost = inputCost + cachedCost + outputCost;
 
   return {
+    promptTokens,
+    completionTokens,
+    cachedTokens,
+    nonCachedInputTokens: nonCachedInput,
+    totalTokens,
     inputCost: +inputCost.toFixed(8),
     cachedCost: +cachedCost.toFixed(8),
     outputCost: +outputCost.toFixed(8),
@@ -282,7 +289,6 @@ async function agentLoop(userQuery, ngrokUrl, xaiApiKey, modelId) {
 
     // Call xAI
     const response = await callXAI(messages, xaiApiKey, modelId);
-    log(`   response: ${response}/M`);
     const iterEndTime = Date.now();
     const iterDuration = iterEndTime - iterStartTime;
 
@@ -382,7 +388,7 @@ async function agentLoop(userQuery, ngrokUrl, xaiApiKey, modelId) {
         });
       }
     }
-    iterRecord.push(response)
+
     iterations.push(iterRecord);
   }
 
@@ -429,9 +435,9 @@ async function agentLoop(userQuery, ngrokUrl, xaiApiKey, modelId) {
 
     // Cost totals
     cost: {
-      totalInputCost: +((totalInputTokens - totalCachedTokens) / 1_000_000 * modelInfo.input).toFixed(8),
-      totalCachedCost: +(totalCachedTokens / 1_000_000 * modelInfo.cachedInput).toFixed(8),
-      totalOutputCost: +(totalOutputTokens / 1_000_000 * modelInfo.output).toFixed(8),
+      totalInputCost: +iterations.reduce((s, i) => s + (i.cost?.inputCost || 0), 0).toFixed(8),
+      totalCachedCost: +iterations.reduce((s, i) => s + (i.cost?.cachedCost || 0), 0).toFixed(8),
+      totalOutputCost: +iterations.reduce((s, i) => s + (i.cost?.outputCost || 0), 0).toFixed(8),
       totalCost: +totalCost.toFixed(8),
       currency: "USD",
     },
