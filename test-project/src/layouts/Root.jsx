@@ -1,20 +1,20 @@
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { useSelector, useDispatch } from "react-redux";
-import { useEffect, useState, createContext, useContext } from "react";
-import { setUser, clearUser, setInitialized } from "@/store/userSlice";
-import { getRouteConfig, verifyRouteAccess } from "@/router/route.utils";
-import { getApperClient } from "@/services/apperClient";
+import { Outlet, useLocation, useNavigate } from "react-router-dom"
+import { useSelector, useDispatch } from "react-redux"
+import { useEffect, useState, createContext, useContext } from "react"
+import { setUser, clearUser, setInitialized } from "@/store/userSlice"
+import { getRouteConfig, verifyRouteAccess } from "@/router/route.utils"
+import { getApperClient } from "@/services/apperClient"
 
 // Auth context for logout functionality
-const AuthContext = createContext(null);
+const AuthContext = createContext(null)
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
+  const context = useContext(AuthContext)
   if (!context) {
-    throw new Error("useAuth must be used within Root component");
+    throw new Error("useAuth must be used within Root component")
   }
-  return context;
-};
+  return context
+}
 
 // Loading Spinner Component
 const LoadingSpinner = () => (
@@ -26,55 +26,55 @@ const LoadingSpinner = () => (
       </svg>
     </div>
   </div>
-);
+)
 
 export default function Root() {
-  const { isInitialized, user } = useSelector(state => state.user);
-  const location = useLocation();
-  const navigate = useNavigate();
-  const dispatch = useDispatch();
+  const { isInitialized, user } = useSelector(state => state.user)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const dispatch = useDispatch()
 
-  const [authInitialized, setAuthInitialized] = useState(false);
+  const [authInitialized, setAuthInitialized] = useState(false)
 
   useEffect(() => {
-    initializeAuth();
-  }, []);
+    initializeAuth()
+  }, [])
 
   useEffect(() => {
     // Guard: exit early if not initialized
-    if (!isInitialized) return;
+    if (!isInitialized) return
 
-    const config = getRouteConfig(location.pathname);
+    const config = getRouteConfig(location.pathname)
 
-    const { allowed, redirectTo, excludeRedirectQuery } = verifyRouteAccess(config, user);
+    const { allowed, redirectTo, excludeRedirectQuery } = verifyRouteAccess(config, user)
 
     // Guard: exit early if access is allowed or no redirect
-    if (allowed || !redirectTo) return;
+    if (allowed || !redirectTo) return
 
     // Build redirect URL - add redirect query param unless excluded
-    let redirectUrl = redirectTo;
+    let redirectUrl = redirectTo
     if (!excludeRedirectQuery) {
-      const redirectPath = location.pathname + location.search;
-      const separator = redirectTo.includes('?') ? '&' : '?';
-      redirectUrl = `${redirectTo}${separator}redirect=${encodeURIComponent(redirectPath)}`;
+      const redirectPath = location.pathname + location.search
+      const separator = redirectTo.includes('?') ? '&' : '?'
+      redirectUrl = `${redirectTo}${separator}redirect=${encodeURIComponent(redirectPath)}`
     }
 
-    navigate(redirectUrl, { replace: true });
-  }, [isInitialized, user, location.pathname, location.search, navigate]);
+    navigate(redirectUrl, { replace: true })
+  }, [isInitialized, user, location.pathname, location.search, navigate])
 
   const initializeAuth = async () => {
     try {
       // Wait for SDK to load and get client
-      const apperClient = await getApperClient();
+      const apperClient = await getApperClient()
 
       if (!apperClient || !window.ApperSDK) {
-        console.error('Failed to initialize ApperSDK or ApperClient');
-        dispatch(clearUser());
-        handleAuthComplete();
-        return;
+        console.error('Failed to initialize ApperSDK or ApperClient')
+        dispatch(clearUser())
+        handleAuthComplete()
+        return
       }
 
-      const { ApperUI } = window.ApperSDK;
+      const { ApperUI } = window.ApperSDK
 
       ApperUI.setup(apperClient, {
         target: "#authentication",
@@ -82,82 +82,74 @@ export default function Root() {
         view: "both",
         onSuccess: handleAuthSuccess,
         onError: handleAuthError,
-      });
+      })
 
     } catch (error) {
-      console.error('Failed to initialize authentication:', error);
-      dispatch(clearUser());
-      handleAuthComplete();
+      console.error('Failed to initialize authentication:', error)
+      dispatch(clearUser())
+      handleAuthComplete()
     }
-  };
+  }
 
-const handleAuthSuccess = async (user) => {
+  const handleAuthSuccess = (user) => {
     if (user) {
-      const transformedUser = dispatch(setUser(user)); // Dispatch setUser thunk and get transformed user
-      
-      // Initialize user's booking configuration after successful authentication
-      try {
-        const { dataInitializer } = await import('@/services/api/dataInitializer');
-        await dataInitializer.initializeIfNeeded();
-      } catch (error) {
-        console.error('Failed to initialize user data after authentication:', error);
-      }
-      
-      handleNavigation(transformedUser);
+      const transformedUser = dispatch(setUser(user)) // Dispatch setUser thunk and get transformed user
+      handleNavigation(transformedUser)
     } else {
-      dispatch(clearUser());
+      dispatch(clearUser())
     }
-    handleAuthComplete();
-  };
+    handleAuthComplete()
+  }
 
   const handleAuthError = (error) => {
-    console.error("Auth error:", error);
-    dispatch(clearUser());
-    handleAuthComplete();
-  };
+    console.error("Auth error:", error)
+    dispatch(clearUser())
+    handleAuthComplete()
+  }
 
   const handleAuthComplete = () => {
-    setAuthInitialized(true); // Local loading state
-    dispatch(setInitialized(true)); // Redux state for route guards
-  };
+    setAuthInitialized(true) // Local loading state
+    dispatch(setInitialized(true)) // Redux state for route guards
+  }
 
-const handleNavigation = (user) => {
-  const urlParams = new URLSearchParams(window.location.search);
-  const redirectPath = urlParams.get("redirect");
-  const profileName = user?.profile?.name;
+  const handleNavigation = (user) => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const redirectPath = urlParams.get("redirect")
+    const profileName = user?.profile?.name
 
-  if (redirectPath) {
-    navigate(redirectPath);
-  } else {
-    // Navigate to booking configuration for authenticated users from auth pages
-    const authPages = ["/booker/login", "/booker/signup", "/callback"];
-    const isOnAuthPage = authPages.some(page =>
-window.location.pathname.includes(page)
-    );
-if (isOnAuthPage) {
-      navigate("/booking-config"); // Navigate to booking configuration after authentication
+    if (redirectPath) {
+      navigate(redirectPath)
+    } else {
+      // Navigate to home only if on auth pages
+      const authPages = ["/authenticateduser/login", "/authenticateduser/signup", "/callback"]
+      const isOnAuthPage = authPages.some(page =>
+        window.location.pathname.includes(page)
+      )
+      if (isOnAuthPage) {
+        navigate("/") // Navigate to appropriate route as per the profileName
+      }
     }
   }
-};
 
-const logout = async () => {
-  try {
-    dispatch(clearUser());
-    navigate("/");
-    await window.ApperSDK?.ApperUI?.logout();
-  } catch (error) {
-    console.error("Logout failed:", error);
+  const logout = async () => {
+    try {
+      dispatch(clearUser())
+      navigate("/")
+      await window.ApperSDK?.ApperUI?.logout()
+    } catch (error) {
+      console.error("Logout failed:", error)
+    }
   }
-};
 
   // Show loading spinner until auth is initialized
   if (!authInitialized) {
-    return <LoadingSpinner />;
+    return <LoadingSpinner />
   }
 
   return (
+    //ONLY RETURN AuthContext.Provider WITH AN Outlet AS ITS CHILD 
     <AuthContext.Provider value={{ logout, isInitialized: authInitialized }}>
       <Outlet />
     </AuthContext.Provider>
-  );
+  )
 }

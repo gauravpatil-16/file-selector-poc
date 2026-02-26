@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/layouts/Root';
 import ApperIcon from '@/components/ApperIcon';
 
-const AccessDeniedPage = () => {
+const AccessDenied = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { logout } = useAuth();
@@ -40,6 +40,7 @@ const AccessDeniedPage = () => {
         {/* Actions */}
         <div className="space-y-3">
           <button
+            type="button"
             onClick={handleGoBack}
             className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
           >
@@ -48,6 +49,7 @@ const AccessDeniedPage = () => {
           </button>
           
           <button
+            type="button"
             onClick={handleLogout}
             className="w-full px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium flex items-center justify-center gap-2"
           >
@@ -60,4 +62,4 @@ const AccessDeniedPage = () => {
   );
 };
 
-export default AccessDeniedPage;
+export default AccessDenied;

@@ -1,147 +1,85 @@
 {
-"/services": {
+  "/": {
     "allow": {
       "when": {
         "conditions": [
           {
-            "label": "User must be authenticated",
+            "label": "Public page accessible to everyone",
+            "rule": "public"
+          }
+        ]
+      }
+    }
+  },
+  "/discover": {
+    "allow": {
+      "when": {
+        "conditions": [
+          {
+            "label": "Public discovery page",
+            "rule": "public"
+          }
+        ]
+      }
+    }
+  },
+  "/create": {
+    "allow": {
+      "when": {
+        "conditions": [
+          {
+            "label": "Must be authenticated to create posts",
             "rule": "authenticated"
           }
         ]
       },
-      "redirectOnDeny": "/booker/login"
+      "redirectOnDeny": "/authenticateduser/login"
     }
   },
-"/booking-config": {
+  "/messages": {
     "allow": {
       "when": {
         "conditions": [
           {
-            "label": "User must be authenticated to access booking configuration",
+            "label": "Must be authenticated to view messages",
             "rule": "authenticated"
           }
         ]
       },
-      "redirectOnDeny": "/booker/login"
+      "redirectOnDeny": "/authenticateduser/login"
     }
   },
-  "/config/*": {
+  "/profile": {
     "allow": {
       "when": {
         "conditions": [
           {
-            "label": "Public access to booking configurations",
-            "rule": "public"
-          }
-        ]
-      }
-    }
-  },
-  "/config/:slug": {
-    "allow": {
-      "when": {
-        "conditions": [
-          {
-            "label": "Public access to booking configurations",
-            "rule": "public"
-          }
-        ]
-      }
-}
-  },
-  "/services": {
-    "allow": {
-      "when": {
-        "conditions": [
-          {
-            "label": "User must be authenticated",
+            "label": "Must be authenticated to view profile",
             "rule": "authenticated"
           }
         ]
       },
-      "redirectOnDeny": "/booker/login"
+      "redirectOnDeny": "/authenticateduser/login"
     }
   },
-  "/bookings": {
+  "/authenticateduser/login": {
     "allow": {
       "when": {
         "conditions": [
           {
-            "label": "User must be authenticated",
-            "rule": "authenticated"
-          }
-        ]
-      },
-      "redirectOnDeny": "/booker/login"
-    }
-  },
-  "/availability": {
-    "allow": {
-      "when": {
-        "conditions": [
-          {
-            "label": "User must be authenticated",
-            "rule": "authenticated"
-          }
-        ]
-      },
-      "redirectOnDeny": "/booker/login"
-    }
-  },
-"/book": {
-    "allow": {
-      "when": {
-        "conditions": [
-          {
-            "label": "Always allow access to booking page",
+            "label": "Login page is public",
             "rule": "public"
           }
         ]
       }
     }
   },
-"/book/:slug": {
+  "/authenticateduser/signup": {
     "allow": {
       "when": {
         "conditions": [
           {
-            "label": "Public booking page access",
-            "rule": "public"
-          }
-        ]
-      }
-    }
-  },
-  "/booking-confirmation/:slug": {
-    "allow": {
-      "when": {
-        "conditions": [
-          {
-            "label": "Public access allowed", 
-            "rule": "public"
-          }
-        ]
-      }
-    }
-  },
-  "/booker/login": {
-    "allow": {
-      "when": {
-        "conditions": [
-          {
-            "label": "Public page",
-            "rule": "public"
-          }
-        ]
-      }
-    }
-  },
-  "/booker/signup": {
-    "allow": {
-      "when": {
-        "conditions": [
-          {
-            "label": "Public page",
+            "label": "Signup page is public",
             "rule": "public"
           }
         ]
@@ -153,7 +91,7 @@
       "when": {
         "conditions": [
           {
-            "label": "Public page",
+            "label": "Callback page is public",
             "rule": "public"
           }
         ]
@@ -165,7 +103,7 @@
       "when": {
         "conditions": [
           {
-            "label": "Public page",
+            "label": "Error page is public",
             "rule": "public"
           }
         ]
@@ -177,31 +115,31 @@
       "when": {
         "conditions": [
           {
-            "label": "Public page",
+            "label": "Access denied page is public",
             "rule": "public"
           }
         ]
       }
     }
   },
-  "/prompt-password/:appId/:emailAddress/:provider": {
+  "/prompt-password/*": {
     "allow": {
       "when": {
         "conditions": [
           {
-            "label": "Public page",
+            "label": "Password prompt is public",
             "rule": "public"
           }
         ]
       }
     }
   },
-  "/reset-password/:appId/:fields": {
+  "/reset-password/*": {
     "allow": {
       "when": {
         "conditions": [
           {
-            "label": "Public page",
+            "label": "Password reset is public",
             "rule": "public"
           }
         ]

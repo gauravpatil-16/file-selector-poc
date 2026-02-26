@@ -1,17 +1,18 @@
 import routeConfig from "./routes.json";
+import React from "react";
 
 // Custom authorization functions registry
-const customFunctions = {}; // Always keep empty
+const customFunctions = {} // Always keep empty
 
 // Get route configuration with pattern matching
 export const getRouteConfig = (path) => {
     // Normalize the path
-    if (!path || path === "index") path = "/";
-    if (!path.startsWith("/")) path = "/" + path;
+    if (!path || path === "index") path = "/"
+    if (!path.startsWith("/")) path = "/" + path
 
     // First check for direct match
     if (routeConfig[path]) {
-        return routeConfig[path];
+        return routeConfig[path]
     }
 
     // If no direct match, check patterns
@@ -22,117 +23,117 @@ export const getRouteConfig = (path) => {
             config: routeConfig[pattern],
             specificity: getSpecificity(pattern)
         }))
-        .sort((a, b) => b.specificity - a.specificity);
+        .sort((a, b) => b.specificity - a.specificity)
 
     // Return null for unmatched routes to let React Router handle them naturally
-    return matches[0]?.config || null;
-};
+    return matches[0]?.config || null
+}
 
 // Pattern matching logic
 function matchesPattern(path, pattern) {
-    if (path === pattern) return true;
+    if (path === pattern) return true
 
     // Handle parameter routes (like /product/:id)
     if (pattern.includes(":")) {
-        const regex = new RegExp("^" + pattern.replace(/:[^/]+/g, "[^/]+") + "$");
-        return regex.test(path);
+        const regex = new RegExp("^" + pattern.replace(/:[^/]+/g, "[^/]+") + "$")
+        return regex.test(path)
     }
 
     // Handle wildcard patterns
     if (pattern.includes("*")) {
         if (pattern.endsWith("/**/*")) {
-            const base = pattern.replace("/**/*", "");
-            return path.startsWith(base + "/");
+            const base = pattern.replace("/**/*", "")
+            return path.startsWith(base + "/")
         } else if (pattern.endsWith("/*")) {
-            const base = pattern.replace("/*", "");
-            const remainder = path.replace(base, "");
-            return remainder.startsWith("/") && !remainder.substring(1).includes("/");
+            const base = pattern.replace("/*", "")
+            const remainder = path.replace(base, "")
+            return remainder.startsWith("/") && !remainder.substring(1).includes("/")
         }
     }
 
-    return false;
+    return false
 }
 
 // Calculate pattern specificity for sorting (higher = more specific)
 function getSpecificity(pattern) {
-    let score = 0;
+    let score = 0
 
     // Exact paths get highest priority
     if (!pattern.includes("*") && !pattern.includes(":")) {
-        score += 1000;
+        score += 1000
     }
 
     // Parameter routes get medium priority
     if (pattern.includes(":")) {
-        score += 500;
+        score += 500
     }
 
     // Single wildcards get lower priority than parameters
     if (pattern.includes("/*") && !pattern.includes("/**/*")) {
-        score += 300;
+        score += 300
     }
 
     // Deep wildcards get lowest priority
     if (pattern.includes("/**/*")) {
-        score += 100;
+        score += 100
     }
 
     // Longer patterns are more specific
-    score += pattern.length;
+    score += pattern.length
 
-    return score;
+    return score
 }
 
 function evaluateRule(rule, user) {
     // Basic rules
-    if (rule === "public") return true;
-    if (rule === "authenticated") return !!user;
+    if (rule === "public") return true
+    if (rule === "authenticated") return !!user
 
-    return evaluateDynamicRule(rule, user);
+    return evaluateDynamicRule(rule, user)
 }
 
 function evaluateDynamicRule(rule, user) {
-    if (!user) return false;
+    if (!user) return false
 
     try {
         // Dynamically extract all keys and values from user object
-        const contextKeys = Object.keys(user);
-        const contextValues = Object.values(user);
+        const contextKeys = Object.keys(user)
+        const contextValues = Object.values(user)
 
         // Wrap expression in return statement if not already present
         const wrappedRule = rule.trim().startsWith('return')
             ? rule
-            : `return (${rule})`;
+            : `return (${rule})`
 
         // Create function with all user properties as parameters
-        const func = new Function(...contextKeys, wrappedRule);
+        const func = new Function(...contextKeys, wrappedRule)
 
         // Execute function with user values
-        const result = func(...contextValues);
+        const result = func(...contextValues)
 
         // Ensure boolean result
-        return Boolean(result);
+        return Boolean(result)
 
     } catch (error) {
-        console.error('Error evaluating rule:', rule, error);
-        return false;
+        console.error('Error evaluating rule:', rule, error)
+        return false
     }
 }
 
 // Helper to execute custom function
 function executeCustomFunction(functionName, user) {
-    const func = customFunctions[functionName];
+    const func = customFunctions[functionName]
 
     if (!func) {
-        console.error(`Custom function "${functionName}" not found`);
-        return false;
+        console.error(`Custom function "${functionName}" not found`)
+        return false
     }
 
     try {
-        return Boolean(func(user));
+        return Boolean(func(user))
     } catch (error) {
-        console.error(`Error executing custom function "${functionName}":`, error);
-        return false;
+        console.error(`Error executing custom function "${functionName}":`, error)
+        return false
     }
 }
 
@@ -140,37 +141,37 @@ function executeCustomFunction(functionName, user) {
 function resolveRedirectPath({ redirectOnDeny, user = null }) {
   // Case 1: No redirectOnDeny provided
   if (!redirectOnDeny) {
-    return "/login";  // Default to login page
+    return "/login"  // Default to login page
   }
 
   // Case 2: Simple string (backward compatibility)
   // Example: "redirectOnDeny": "/login"
   if (typeof redirectOnDeny === "string") {
-    return redirectOnDeny;
+    return redirectOnDeny
   }
 
   // Case 3: Object with default and permission paths
   // Example: "redirectOnDeny": {
-  //   "default": "/login",
-  //   "permission": "/access-denied"
+  // "default": "/login",
+  // "permission": "/access-denied"
   // }
   if (typeof redirectOnDeny === "object") {
     // If user does not exists, then redirect to default path
     if(!user) {
-        return redirectOnDeny.default || "/login";
+        return redirectOnDeny.default || "/login"
     }
       
     // If permission path exists, use it (user is logged in but wrong profile)
     if (redirectOnDeny.permission) {
-      return redirectOnDeny.permission;
+      return redirectOnDeny.permission
     }
     
     // Otherwise use default path (user is not logged in)
-    return redirectOnDeny.default || "/login";
+    return redirectOnDeny.default || "/login"
   }
 
   // Fallback
-  return "/login";
+  return "/login"
 }
 
 export function verifyRouteAccess(config, user) {
@@ -181,57 +182,57 @@ export function verifyRouteAccess(config, user) {
             redirectTo: null,
             excludeRedirectQuery: false,
             failed: []
-        };
+        }
     }
 
-    const allowedConfig = config.allow;
+    const allowedConfig = config.allow
 
-    // If custom function is specified, use it instead of when conditions
+// If custom function is specified, use it instead of when conditions
     if (allowedConfig.function) {
-        const allowed = executeCustomFunction(allowedConfig.function, user);
+        const functionResult = executeCustomFunction(allowedConfig.function, user)
 
         return {
-            allowed,
-            redirectTo: allowed ? null : resolveRedirectPath({
+            allowed: functionResult,
+            redirectTo: functionResult ? null : resolveRedirectPath({
                 redirectOnDeny: allowedConfig.redirectOnDeny,
-				user
+                user
             }),
             excludeRedirectQuery: allowedConfig.excludeRedirectQuery === true,
-            failed: allowed ? [] : [`Custom function "${allowedConfig.function}" failed`]
-        };
+            failed: functionResult ? [] : [`Custom function "${allowedConfig.function}" failed`]
+        }
     }
 
     // Otherwise, use the when conditions as before
-    const whenClause = allowedConfig.when || allowedConfig;
-    const { conditions = [], operator = "OR" } = whenClause;
+    const whenClause = allowedConfig.when || allowedConfig
+    const { conditions = [], operator = "OR" } = whenClause
 
     // Evaluate all conditions
     const results = conditions.map(cond => ({
         label: cond.label,
         rule: cond.rule,
         passed: evaluateRule(cond.rule, user)
-    }));
+    }))
     
-    const failed = results.filter(r => !r.passed);
+    const failed = results.filter(r => !r.passed)
 
     // Apply operator logic
     const allowed = operator === "OR"
         ? results.some(r => r.passed)
-        : results.every(r => r.passed);
+        : results.every(r => r.passed)
 
     // Determine redirect
-    let redirectTo = null;
+    let redirectTo = null
     if (!allowed) {
         redirectTo = resolveRedirectPath({
             redirectOnDeny: allowedConfig.redirectOnDeny,
-			user
-        });
+            user
+        })
     }
-
+    
     return {
         allowed,
         redirectTo,
         excludeRedirectQuery: allowedConfig.excludeRedirectQuery === true,
         failed: failed.map(f => f.label)
-    };
+    }
 }

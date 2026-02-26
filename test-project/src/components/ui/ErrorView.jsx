@@ -1,35 +1,38 @@
-import { cn } from "@/utils/cn";
-import ApperIcon from "@/components/ApperIcon";
+import ApperIcon from "@/components/ApperIcon"
 
 const ErrorView = ({ 
-  className, 
-  title = "Oops! Something went wrong",
-  message = "We're having trouble loading your data. Please try again.",
-  onRetry,
-  showRetry = true 
+  title = "Something went wrong", 
+  message = "We're having trouble loading this content. Please try again.",
+  onRetry 
 }) => {
   return (
-    <div className={cn("flex flex-col items-center justify-center p-8 text-center space-y-6", className)}>
-      <div className="w-20 h-20 bg-gradient-to-br from-red-100 to-red-200 rounded-full flex items-center justify-center">
-        <ApperIcon name="AlertTriangle" className="w-10 h-10 text-error" />
+    <div className="flex flex-col items-center justify-center min-h-64 px-4 py-8 text-center">
+      {/* Error Icon */}
+      <div className="w-16 h-16 bg-error/10 rounded-full flex items-center justify-center mb-4">
+        <ApperIcon name="AlertCircle" size={32} className="text-error" />
       </div>
+
+      {/* Error Content */}
+      <h2 className="text-xl font-semibold text-gray-900 mb-2">
+        {title}
+      </h2>
       
-      <div className="space-y-2">
-        <h3 className="text-xl font-bold text-gray-900">{title}</h3>
-        <p className="text-secondary max-w-md">{message}</p>
-      </div>
-      
-      {showRetry && onRetry && (
+      <p className="text-gray-600 mb-6 max-w-md leading-relaxed">
+        {message}
+      </p>
+
+      {/* Retry Button */}
+      {onRetry && (
         <button
           onClick={onRetry}
-          className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary to-blue-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
+          className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-primary text-white font-medium rounded-lg hover:shadow-lg transition-all duration-fast active:scale-95"
         >
-          <ApperIcon name="RefreshCw" className="w-5 h-5" />
-          Try Again
+          <ApperIcon name="RotateCw" size={16} />
+          <span>Try Again</span>
         </button>
       )}
     </div>
-  );
-};
+  )
+}
 
-export default ErrorView;
+export default ErrorView

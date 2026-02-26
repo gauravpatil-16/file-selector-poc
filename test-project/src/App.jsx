@@ -1,6 +1,6 @@
-import { RouterProvider } from "react-router-dom";
-import { ToastContainer } from "react-toastify";
-import { router } from "@/router";
+import { RouterProvider } from "react-router-dom"
+import { ToastContainer } from "react-toastify"
+import { router } from "@/router"
 
 function App() {
   return (
@@ -10,17 +10,17 @@ function App() {
         position="top-right"
         autoClose={3000}
         hideProgressBar={false}
-        newestOnTop
+        newestOnTop={false}
         closeOnClick
         rtl={false}
         pauseOnFocusLoss
         draggable
         pauseOnHover
         theme="light"
-        className="z-[9999]"
+        style={{ zIndex: 9999 }}
       />
     </>
-  );
+  )
 }
 
-export default App;
+export default App

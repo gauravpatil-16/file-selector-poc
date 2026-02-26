@@ -7,15 +7,16 @@ export const useProfile = () => {
   const profileName = user?.profile?.name;
   
   // Helper functions for common profile checks
-  const isBooker = profileName === 'Booker_c';
-  // Add helpers for all profiles in profiles.json
+  const isAuthenticatedUser = profileName === 'AuthenticatedUser_c';
+  const isPublicProfile = profileName === 'PublicProfile_c';
   
   // Generic checker
   const hasProfile = (profile) => profileName === profile;
   
   return {
     profileName,
-    isBooker,
+    isAuthenticatedUser,
+    isPublicProfile,
     hasProfile,
     user,
     isAuthenticated,
